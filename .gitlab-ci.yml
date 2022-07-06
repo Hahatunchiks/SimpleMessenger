@@ -1,0 +1,38 @@
+# DO NOT TOUCH IT FILE !!!
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_PIPELINE_SOURCE == 'web'
+
+stages:
+  - build
+  - tidy
+  - test
+
+build:
+  stage: build
+  script:
+    - bash build
+  artifacts:
+    when: always
+    reports:
+      junit: results/TEST-build.xml
+
+tidy:
+  stage: tidy
+  needs: ["build"]
+  script:
+    - cd -- "$GIT_CLONE_PATH"
+    - make clang_format
+    - make clang_tidy
+
+tests:
+  stage: test
+  needs: ["build", "tidy"]
+  script:
+    - bash tests
+  artifacts:
+    when: always
+    reports:
+      junit: results/TEST-tests.xml
