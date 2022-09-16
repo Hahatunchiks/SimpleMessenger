@@ -1,77 +1,64 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <pthread.h>
 
-#include <netdb.h>
-#include <netinet/in.h>
-#include <unistd.h>
+#include "ServerAppDir/TcpServer.h"
 
-#include <string.h>
+void *HandleClient(void *arg) {
+  auto session = (ClientSessionInfo *)arg;
+  while (true) {
+    try {
+      std::int32_t Sizes;
+      auto received = read(session->fd, &Sizes, sizeof(Sizes));
+      if (received <= 0) {
+        throw std::runtime_error("Cannot receive username size");
+      }
+      std::string username(Sizes, '\0');
+      received = read(session->fd, (char *)username.c_str(), Sizes);
+      if (received < 0) {
+        throw std::runtime_error("Cannot receive username");
+      }
+
+      received = read(session->fd, &Sizes, sizeof(Sizes));
+      if (received <= 0) {
+        throw std::runtime_error("Cannot receive message size");
+      }
+
+      std::cerr << Sizes <<  " Session fd " << session->fd << std::endl;
+
+      std::string message(Sizes, '\0');
+      received = read(session->fd, (char *)message.c_str(), Sizes);
+      if (received < 0) {
+        throw std::runtime_error("Cannot receive message");
+      }
+
+      session->serv->SendToAll(message, username);
+    } catch (std::runtime_error &e) {
+      session->serv->DeleteClient(session->fd);
+      std::cerr << e.what() << std::endl;
+      break;
+    } catch(...) {
+      session->serv->DeleteClient(session->fd);
+      std::cerr << "Strange errors..." << std::endl;
+      break;
+    }
+  }
+  return nullptr;
+}
 
 int main(int argc, char *argv[]) {
-  (void)argc;
-  (void)argv;
-  int sockfd, newsockfd;
-  uint16_t portno;
-  unsigned int clilen;
-  char buffer[256];
-  struct sockaddr_in serv_addr, cli_addr;
-  ssize_t n;
-
-  /* First call to socket() function */
-  sockfd = socket(AF_INET, SOCK_STREAM, 0);
-
-  if (sockfd < 0) {
-    perror("ERROR opening socket");
-    exit(1);
+  if (argc != 2) {
+    std::cerr << "Usage ./server port" << std::endl;
+    return -1;
   }
-
-  /* Initialize socket structure */
-  bzero((char *)&serv_addr, sizeof(serv_addr));
-  portno = 5001;
-
-  serv_addr.sin_family = AF_INET;
-  serv_addr.sin_addr.s_addr = INADDR_ANY;
-  serv_addr.sin_port = htons(portno);
-
-  /* Now bind the host address using bind() call.*/
-  if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-    perror("ERROR on binding");
-    exit(1);
+  try {
+    TcpServer server{std::stoi(argv[1])};
+    while (true) {
+      auto session = server.Accept();
+      pthread_t newClientThread;
+      session->serv = &server;
+      pthread_create(&newClientThread, nullptr, HandleClient, session);
+    }
+  } catch (std::runtime_error &e) {
+    std::cerr << e.what() << std::endl;
   }
-
-  /* Now start listening for the clients, here process will
-   * go in sleep mode and will wait for the incoming connection
-   */
-
-  listen(sockfd, 5);
-  clilen = sizeof(cli_addr);
-
-  /* Accept actual connection from the client */
-  newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
-
-  if (newsockfd < 0) {
-    perror("ERROR on accept");
-    exit(1);
-  }
-
-  /* If connection is established then start communicating */
-  bzero(buffer, 256);
-  n = read(newsockfd, buffer, 255);
-
-  if (n < 0) {
-    perror("ERROR reading from socket");
-    exit(1);
-  }
-
-  printf("Here is the message: %s\n", buffer);
-
-  /* Write a response to the client */
-  n = write(newsockfd, "I got your message", 18);
-
-  if (n < 0) {
-    perror("ERROR writing to socket");
-    exit(1);
-  }
-
   return 0;
 }

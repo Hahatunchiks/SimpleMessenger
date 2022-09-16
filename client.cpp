@@ -1,84 +1,102 @@
-#include <stdio.h>
-#include <stdlib.h>
 
-#include <netdb.h>
-#include <netinet/in.h>
-#include <unistd.h>
+#include <pthread.h>
+#include <iostream>
+#include <string>
+#include <vector>
 
-#include <string.h>
+#include "ClientAppDir/TcpSession.h"
+
+void *SendTask(void *args) {
+  auto *session = (TcpSession *)args;
+  while (true) {
+    std::string inputMessage;
+    std::getline(std::cin, inputMessage, '\n');
+
+    if (!session->GetIsEnterMessage()) {
+      if (inputMessage == "m") {
+        session->SetIsEnterMessage(true);
+      }
+      continue;
+    }
+
+    try {
+      session->Send(inputMessage);
+      session->SetIsEnterMessage(false);
+    } catch (std::system_error &e) {
+      std::cerr << e.what() << std::endl;
+      break;
+    } catch (...) {
+      std::cerr << "Send Task Strange errors..." << std::endl;
+      break;
+    }
+  }
+  return nullptr;
+}
+
+void *ReceiveTask(void *args) {
+  auto *session = (TcpSession *)args;
+  std::vector<std::string> buff;
+  while (true) {
+    try {
+      auto message = session->Receive();
+      buff.push_back( message);
+      if(session->GetIsEnterMessage()) {
+        continue ;
+      }
+      for(const auto &i : buff) {
+        std::cout << i << std::endl;
+      }
+      buff.clear();
+    } catch (std::system_error &e) {
+      std::cerr << e.what() << std::endl;
+      break;
+    } catch (...) {
+      std::cerr << "Server errors..." << std::endl;
+      break;
+    }
+  }
+  return nullptr;
+}
 
 int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
-  int sockfd, n;
-  uint16_t portno;
-  struct sockaddr_in serv_addr;
-  struct hostent *server;
-
-  char buffer[256];
-
-  if (argc < 3) {
-    fprintf(stderr, "usage %s hostname port\n", argv[0]);
+  if (argc != 4) {
+    std::cerr << "usage %s hostname port nickname\n";
     exit(0);
   }
 
-  portno = (uint16_t)atoi(argv[2]);
+  User user;
+  Host host;
+  host.m_Port = std::stoi(argv[2]);
+  host.m_Host = argv[1];
+  user.m_Nickname = argv[3];
 
-  /* Create a socket point */
-  sockfd = socket(AF_INET, SOCK_STREAM, 0);
-
-  if (sockfd < 0) {
-    perror("ERROR opening socket");
-    exit(1);
-  }
-
-  server = gethostbyname(argv[1]);
-
-  if (server == NULL) {
-    fprintf(stderr, "ERROR, no such host\n");
+  if (user.m_Nickname.empty() || host.m_Host.empty()) {
+    std::cerr << "usage %s hostname port nickname\n";
     exit(0);
   }
 
-  bzero((char *)&serv_addr, sizeof(serv_addr));
-  serv_addr.sin_family = AF_INET;
-  bcopy(server->h_addr, (char *)&serv_addr.sin_addr.s_addr,
-        (size_t)server->h_length);
-  serv_addr.sin_port = htons(portno);
+  try {
+    TcpSession session{host, user};
+    session.Connect();
 
-  /* Now connect to the server */
-  if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-    perror("ERROR connecting");
-    exit(1);
+    pthread_t sender, receiver;
+    int senderIt = pthread_create(&sender, nullptr, SendTask, &session);
+    int receiverIt = pthread_create(&receiver, nullptr, ReceiveTask, &session);
+    if (senderIt) {
+      return -1;
+    }
+    if (receiverIt) {
+      return -1;
+    }
+
+    pthread_join(sender, nullptr);
+    pthread_join(receiver, nullptr);
+  } catch (std::runtime_error &e) {
+    std::cerr << e.what() << std::endl;
+    return -1;
   }
 
-  /* Now ask for a message from the user, this message
-   * will be read by server
-   */
-
-  printf("Please enter the message: ");
-  bzero(buffer, 256);
-  if (fgets(buffer, 255, stdin) == NULL) {
-    perror("ERROR reading from stdin");
-    exit(1);
-  }
-
-  /* Send message to the server */
-  n = write(sockfd, buffer, strlen(buffer));
-
-  if (n < 0) {
-    perror("ERROR writing to socket");
-    exit(1);
-  }
-
-  /* Now read server response */
-  bzero(buffer, 256);
-  n = read(sockfd, buffer, 255);
-
-  if (n < 0) {
-    perror("ERROR reading from socket");
-    exit(1);
-  }
-
-  printf("%s\n", buffer);
   return 0;
 }
