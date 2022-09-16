@@ -39,11 +39,11 @@ void *ReceiveTask(void *args) {
   while (true) {
     try {
       auto message = session->Receive();
-      buff.push_back( message);
-      if(session->GetIsEnterMessage()) {
-        continue ;
+      buff.push_back(message);
+      if (session->GetIsEnterMessage()) {
+        continue;
       }
-      for(const auto &i : buff) {
+      for (const auto &i : buff) {
         std::cout << i << std::endl;
       }
       buff.clear();

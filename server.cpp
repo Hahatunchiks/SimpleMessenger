@@ -22,7 +22,7 @@ void *HandleClient(void *arg) {
         throw std::runtime_error("Cannot receive message size");
       }
 
-      std::cerr << Sizes <<  " Session fd " << session->fd << std::endl;
+      std::cerr << Sizes << " Session fd " << session->fd << std::endl;
 
       std::string message(Sizes, '\0');
       received = read(session->fd, (char *)message.c_str(), Sizes);
@@ -35,7 +35,7 @@ void *HandleClient(void *arg) {
       session->serv->DeleteClient(session->fd);
       std::cerr << e.what() << std::endl;
       break;
-    } catch(...) {
+    } catch (...) {
       session->serv->DeleteClient(session->fd);
       std::cerr << "Strange errors..." << std::endl;
       break;
