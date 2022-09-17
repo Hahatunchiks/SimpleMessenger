@@ -36,7 +36,7 @@ class TcpSession {
   }
 
   ~TcpSession() {
-    if(close(m_SockFd) < 0) {
+    if (close(m_SockFd) < 0) {
       std::cerr << "Cannot close socket" << std::endl;
     }
   }
@@ -99,16 +99,14 @@ class TcpSession {
       throw std::runtime_error("Cannot receive message from server");
     }
 
-    return "{" + currTime + "} ["+ nickname + "] " + message;
+    return "{" + currTime + "} [" + nickname + "] " + message;
   }
 
-  [[nodiscard]] bool GetIsEnterMessage() const {
-    return isEnterMessage;
-  }
+  [[nodiscard]] bool GetIsEnterMessage() const { return isEnterMessage; }
 
-  void SetIsEnterMessage(bool flag) {
-    isEnterMessage = flag;
-  }
+  void SetIsEnterMessage(bool flag) { isEnterMessage = flag; }
+
+  bool isEOF{false};
 
  private:
   Host m_HostInfo;
@@ -116,6 +114,7 @@ class TcpSession {
 
   int m_SockFd;
   bool isEnterMessage{false};
+
   sockaddr_in m_servAddr{};
   hostent *m_Server;
 };

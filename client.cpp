@@ -11,6 +11,10 @@ void *SendTask(void *args) {
   while (true) {
     std::string inputMessage;
     std::getline(std::cin, inputMessage, '\n');
+    if (std::cin.eof()) {
+      session->isEOF = true;
+      break;
+    }
 
     if (!session->GetIsEnterMessage()) {
       if (inputMessage == "m") {
@@ -47,6 +51,9 @@ void *ReceiveTask(void *args) {
         std::cout << i << std::endl;
       }
       buff.clear();
+      if (session->isEOF) {
+        break;
+      }
     } catch (std::system_error &e) {
       std::cerr << e.what() << std::endl;
       break;
