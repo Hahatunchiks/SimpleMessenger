@@ -8,7 +8,6 @@ pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
 [[nodiscard]] std::uint32_t ReadSize(int sockFd) {
   std::uint32_t size = -1;
   long n = read(sockFd, &size, sizeof(std::uint32_t));
-  std::cerr << "N: " << n << "size " << size << std::endl;
   if (n <= 0) {
     throw std::runtime_error("Cannot read msg size");
   }
@@ -43,7 +42,6 @@ void *HandleClient(void *arg) {
       pthread_mutex_unlock(&m);
 
       session->serv->SendToAll(message, nickname);
-      std::cerr << "6" << std::endl;
     } catch (std::runtime_error &e) {
       session->serv->DeleteClient(session->fd);
       std::cerr << e.what() << std::endl;
