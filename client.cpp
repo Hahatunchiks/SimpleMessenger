@@ -10,7 +10,10 @@ void *SendTask(void *args) {
   while (true) {
     std::string inputMessage;
     std::getline(std::cin, inputMessage, '\n');
-
+    if (inputMessage.empty()) {
+      session->isEOF = true;
+      break;
+    }
     if (!session->GetIsEnterMessage()) {
       if (inputMessage == "m") {
         session->SetIsEnterMessage(true);
@@ -37,6 +40,7 @@ void *ReceiveTask(void *args) {
   std::vector<std::string> buff;
   while (true) {
     try {
+      if (session->isEOF) break;
       auto message = session->Receive();
       buff.push_back(message);
       if (session->GetIsEnterMessage()) {

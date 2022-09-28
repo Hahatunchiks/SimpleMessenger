@@ -113,7 +113,7 @@ class TcpSession {
 
   void SetIsEnterMessage(bool flag) { isEnterMessage = flag; }
 
-  // bool isEOF{false};
+   bool isEOF{false};
 
  private:
   Host m_HostInfo;

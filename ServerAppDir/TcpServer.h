@@ -85,9 +85,9 @@ class TcpServer {
 
   static void SendMessage(const std::string &message, int sockFd) {
     unsigned long sent = 0;
+
     while (sent < message.size()) {
-      long curr =
-          write(sockFd, (char *)message.c_str() + sent, message.size() - sent);
+      long curr = write(sockFd, (char *)message.c_str() + sent, message.size() - sent);
       if (curr < 0) {
         throw std::runtime_error("Cannot write msg");
       }
@@ -102,11 +102,16 @@ class TcpServer {
 
   void SendToAll(const std::string &message, const std::string &userName) {
     pthread_mutex_lock(&m_Mutex);
-    auto currTimeStr = CurrentTime();
-    for (auto &sock : m_ClientSockets) {
-      Send(userName, sock);
-      Send(message, sock);
-      Send(currTimeStr, sock);
+    try {
+      auto currTimeStr = CurrentTime();
+      for (auto &sock : m_ClientSockets) {
+        Send(userName, sock);
+        Send(message, sock);
+        Send(currTimeStr, sock);
+      }
+    } catch (...) {
+      pthread_mutex_unlock(&m_Mutex);
+      return;
     }
     pthread_mutex_unlock(&m_Mutex);
   }

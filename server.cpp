@@ -1,12 +1,15 @@
 #include <pthread.h>
 
+#include <vector>
 #include "ServerAppDir/TcpServer.h"
+
 pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
 
 [[nodiscard]] std::uint32_t ReadSize(int sockFd) {
-  std::uint32_t size;
+  std::uint32_t size = -1;
   long n = read(sockFd, &size, sizeof(std::uint32_t));
-  if (n < 0) {
+  std::cerr << "N: " << n << "size " << size << std::endl;
+  if (n <= 0) {
     throw std::runtime_error("Cannot read msg size");
   }
   return size;
@@ -17,9 +20,10 @@ pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
   long received = 0;
   while (received < size) {
     long n = read(sockFd, (char *)message.c_str() + received, size - received);
-    if (n < 0) {
+    if (n <= 0) {
       throw std::runtime_error("Cannot read msg size");
     }
+
     received += n;
   }
   return message;
@@ -30,7 +34,6 @@ void *HandleClient(void *arg) {
   while (true) {
     try {
       pthread_mutex_lock(&m);
-
       auto messageSize = ReadSize(session->fd);
       auto nickname = ReadMessage(messageSize, session->fd);
 
@@ -40,13 +43,16 @@ void *HandleClient(void *arg) {
       pthread_mutex_unlock(&m);
 
       session->serv->SendToAll(message, nickname);
+      std::cerr << "6" << std::endl;
     } catch (std::runtime_error &e) {
       session->serv->DeleteClient(session->fd);
       std::cerr << e.what() << std::endl;
+      pthread_mutex_unlock(&m);
       break;
     } catch (...) {
       session->serv->DeleteClient(session->fd);
       std::cerr << "Strange errors..." << std::endl;
+      pthread_mutex_unlock(&m);
       break;
     }
   }
@@ -58,6 +64,7 @@ int main(int argc, char *argv[]) {
     std::cerr << "Usage ./server port" << std::endl;
     return -1;
   }
+  std::vector<pthread_t> threads;
   try {
     TcpServer server{std::stoi(argv[1])};
     while (true) {
@@ -65,9 +72,12 @@ int main(int argc, char *argv[]) {
       pthread_t newClientThread;
       session->serv = &server;
       pthread_create(&newClientThread, nullptr, HandleClient, session);
+
+      threads.push_back(newClientThread);
     }
   } catch (std::runtime_error &e) {
-    std::cerr << e.what() << std::endl;
+    std::cerr << "Error " << e.what() << std::endl;
   }
+
   return 0;
 }
