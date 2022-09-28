@@ -47,66 +47,73 @@ class TcpSession {
     }
   }
 
-  void Send(const std::string &msg) const {
-    std::uint32_t nicknameSize = m_UserInfo.m_Nickname.size();
-    std::uint32_t messageSize = msg.size();
-
-    if ((write(m_SockFd, &nicknameSize, 4)) < 0) {
-      throw std::runtime_error("Cannot send nickname size to server\n");
-    }
-
-    if ((write(m_SockFd, m_UserInfo.m_Nickname.c_str(), nicknameSize)) < 0) {
-      throw std::runtime_error("Cannot send nickname to server\n");
-    }
-
-    if ((write(m_SockFd, &messageSize, 4)) < 0) {
-      throw std::runtime_error("Cannot send message size to server\n");
-    }
-
-    if ((write(m_SockFd, msg.c_str(), messageSize)) < 0) {
-      throw std::runtime_error("Cannot send message to server");
+  void SendSize(std::uint32_t size) const {
+    long n = write(m_SockFd, &size, sizeof(std::uint32_t));
+    if (n < 0) {
+      throw std::runtime_error("Cannot write msg size");
     }
   }
 
+  void SendMessage(const std::string &message) const {
+    unsigned long sent = 0;
+    while (sent < message.size()) {
+      long curr = write(m_SockFd, (char *)message.c_str() + sent,
+                        message.size() - sent);
+      if (curr < 0) {
+        throw std::runtime_error("Cannot write msg");
+      }
+      sent += curr;
+    }
+  }
+
+  void Send(const std::string &msg) const {
+    SendSize(m_UserInfo.m_Nickname.size());
+    SendMessage(m_UserInfo.m_Nickname);
+
+    SendSize(msg.size());
+    SendMessage(msg);
+  }
+
+  [[nodiscard]] std::uint32_t ReadSize() const {
+    std::uint32_t size;
+    long n = read(m_SockFd, &size, sizeof(std::uint32_t));
+    if (n < 0) {
+      throw std::runtime_error("Cannot read msg size");
+    }
+    return size;
+  }
+
+  [[nodiscard]] std::string ReadMessage(std::uint32_t size) const {
+    std::string message(size, '\0');
+    long received = 0;
+    while (received < size) {
+      long n =
+          read(m_SockFd, (char *)message.c_str() + received, size - received);
+      if (n < 0) {
+        throw std::runtime_error("Cannot read msg size");
+      }
+      received += n;
+    }
+    return message;
+  }
+
   [[nodiscard]] std::string Receive() const {
-    std::uint32_t sizes;
-    std::string date;
+    std::uint32_t msgSize = ReadSize();
+    std::string nickname = ReadMessage(msgSize);
 
-    if (read(m_SockFd, &sizes, sizeof(sizes)) <= 0) {
-      throw std::runtime_error("Cannot receive nickname size from server");
-    }
+    msgSize = ReadSize();
+    std::string data = ReadMessage(msgSize);
 
-    std::string nickname(sizes, '\0');
-    if (read(m_SockFd, (char *)nickname.c_str(), sizes) < 0) {
-      throw std::runtime_error("Cannot receive nickname  from server");
-    }
-
-    if (read(m_SockFd, &sizes, sizeof(sizes)) <= 0) {
-      throw std::runtime_error("Cannot receive message size from server");
-    }
-
-    std::string message(sizes, '\0');
-    if (read(m_SockFd, (char *)message.c_str(), sizes) < 0) {
-      throw std::runtime_error("Cannot receive message from server");
-    }
-
-    if (read(m_SockFd, &sizes, sizeof(sizes)) <= 0) {
-      throw std::runtime_error("Cannot receive message size from server");
-    }
-
-    std::string currTime(sizes, '\0');
-    if (read(m_SockFd, (char *)currTime.c_str(), sizes) < 0) {
-      throw std::runtime_error("Cannot receive message from server");
-    }
-
-    return "{" + currTime + "} [" + nickname + "] " + message;
+    msgSize = ReadSize();
+    std::string date = ReadMessage(msgSize);
+    return "{" + date + "}[" + nickname + "]" + data;
   }
 
   [[nodiscard]] bool GetIsEnterMessage() const { return isEnterMessage; }
 
   void SetIsEnterMessage(bool flag) { isEnterMessage = flag; }
 
-  bool isEOF{false};
+  // bool isEOF{false};
 
  private:
   Host m_HostInfo;

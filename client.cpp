@@ -1,4 +1,3 @@
-
 #include <pthread.h>
 #include <iostream>
 #include <string>
@@ -11,9 +10,6 @@ void *SendTask(void *args) {
   while (true) {
     std::string inputMessage;
     std::getline(std::cin, inputMessage, '\n');
-    if (inputMessage.empty()) {
-      break;
-    }
 
     if (!session->GetIsEnterMessage()) {
       if (inputMessage == "m") {

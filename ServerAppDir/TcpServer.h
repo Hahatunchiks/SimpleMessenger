@@ -7,9 +7,9 @@
 #include <unistd.h>
 
 #include <cstring>
-#include <string>
 #include <set>
 #include <stdexcept>
+#include <string>
 
 #include <ctime>
 
@@ -36,8 +36,10 @@ class TcpServer {
     m_ServerAddress.sin_addr.s_addr = INADDR_ANY;
 
     // bind socket
-    if (bind(m_ListenSocket, (sockaddr *)&m_ServerAddress,sizeof(m_ServerAddress)) < 0) {
-      throw std::runtime_error("Server cannot bind because: " + std::to_string(errno));
+    if (bind(m_ListenSocket, (sockaddr *)&m_ServerAddress,
+             sizeof(m_ServerAddress)) < 0) {
+      throw std::runtime_error("Server cannot bind because: " +
+                               std::to_string(errno));
     }
 
     // set socket in listen mode
@@ -52,13 +54,15 @@ class TcpServer {
     pthread_mutex_destroy(&m_Mutex);
   }
 
-  [[nodiscard]] auto Accept()  {
+  [[nodiscard]] auto Accept() {
     sockaddr_in m_ClientAddress{};
     memset(&m_ClientAddress, '\0', sizeof(m_ClientAddress));
     unsigned int cltSize = sizeof(m_ClientAddress);
-    auto newSession = accept(m_ListenSocket, (sockaddr *) &m_ClientAddress, &cltSize);
-    if(newSession < 0 ) {
-      throw std::runtime_error("Server cannot accept because: " + std::to_string(errno));
+    auto newSession =
+        accept(m_ListenSocket, (sockaddr *)&m_ClientAddress, &cltSize);
+    if (newSession < 0) {
+      throw std::runtime_error("Server cannot accept because: " +
+                               std::to_string(errno));
     }
     m_ClientSockets.insert(newSession);
     auto *clt = new ClientSessionInfo;
@@ -72,45 +76,43 @@ class TcpServer {
     return std::to_string(ltm->tm_hour) + ":" + std::to_string(ltm->tm_min);
   }
 
-  void SendToAll(const std::string &message, const std::string &userName)  {
+  static void SendSize(std::uint32_t size, int sockFd) {
+    long n = write(sockFd, &size, sizeof(std::uint32_t));
+    if (n < 0) {
+      throw std::runtime_error("Cannot write msg size");
+    }
+  }
+
+  static void SendMessage(const std::string &message, int sockFd) {
+    unsigned long sent = 0;
+    while (sent < message.size()) {
+      long curr =
+          write(sockFd, (char *)message.c_str() + sent, message.size() - sent);
+      if (curr < 0) {
+        throw std::runtime_error("Cannot write msg");
+      }
+      sent += curr;
+    }
+  }
+
+  static void Send(const std::string &msg, int sockFd) {
+    SendSize(msg.size(), sockFd);
+    SendMessage(msg, sockFd);
+  }
+
+  void SendToAll(const std::string &message, const std::string &userName) {
     pthread_mutex_lock(&m_Mutex);
-
     auto currTimeStr = CurrentTime();
-    for(auto &sock : m_ClientSockets) {
-      std::uint32_t nicknameSize = userName.size();
-      std::uint32_t messageSize = message.size();
-      std::uint32_t timeSize = currTimeStr.size();
-      if((write(sock, &nicknameSize, 4)) < 0 ) {
-        throw std::runtime_error("Cannot send nickname size from server\n");
-      }
-
-      if((write(sock, userName.c_str(), nicknameSize)) < 0 ) {
-        throw std::runtime_error("Cannot send nickname from server\n");
-      }
-
-      if((write(sock, &messageSize, 4)) < 0 ) {
-        throw std::runtime_error("Cannot send message size from server\n");
-      }
-
-      if((write(sock, message.c_str(), messageSize)) < 0 ) {
-        throw std::runtime_error("Cannot send message from server\n");
-      }
-
-      if((write(sock, &timeSize, 4)) < 0 ) {
-        throw std::runtime_error("Cannot send time size from server\n");
-      }
-
-      if((write(sock, currTimeStr.c_str(), timeSize)) < 0 ) {
-        throw std::runtime_error("Cannot send time from server\n");
-      }
-
+    for (auto &sock : m_ClientSockets) {
+      Send(userName, sock);
+      Send(message, sock);
+      Send(currTimeStr, sock);
     }
     pthread_mutex_unlock(&m_Mutex);
   }
 
-  void DeleteClient(int fd) {
-    m_ClientSockets.erase(fd);
-  }
+  void DeleteClient(int fd) { m_ClientSockets.erase(fd); }
+
  private:
   int m_ListenSocket;
   int m_Port;

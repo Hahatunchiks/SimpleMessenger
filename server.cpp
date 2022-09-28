@@ -1,36 +1,45 @@
 #include <pthread.h>
 
 #include "ServerAppDir/TcpServer.h"
+pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+
+[[nodiscard]] std::uint32_t ReadSize(int sockFd) {
+  std::uint32_t size;
+  long n = read(sockFd, &size, sizeof(std::uint32_t));
+  if (n < 0) {
+    throw std::runtime_error("Cannot read msg size");
+  }
+  return size;
+}
+
+[[nodiscard]] std::string ReadMessage(std::uint32_t size, int sockFd) {
+  std::string message(size, '\0');
+  long received = 0;
+  while (received < size) {
+    long n = read(sockFd, (char *)message.c_str() + received, size - received);
+    if (n < 0) {
+      throw std::runtime_error("Cannot read msg size");
+    }
+    received += n;
+  }
+  return message;
+}
 
 void *HandleClient(void *arg) {
   auto session = (ClientSessionInfo *)arg;
   while (true) {
     try {
-      std::int32_t Sizes;
-      auto received = read(session->fd, &Sizes, sizeof(Sizes));
-      if (received <= 0) {
-        throw std::runtime_error("Cannot receive username size");
-      }
-      std::string username(Sizes, '\0');
-      received = read(session->fd, (char *)username.c_str(), Sizes);
-      if (received < 0) {
-        throw std::runtime_error("Cannot receive username");
-      }
+      pthread_mutex_lock(&m);
 
-      received = read(session->fd, &Sizes, sizeof(Sizes));
-      if (received <= 0) {
-        throw std::runtime_error("Cannot receive message size");
-      }
+      auto messageSize = ReadSize(session->fd);
+      auto nickname = ReadMessage(messageSize, session->fd);
 
-      std::cerr << Sizes << " Session fd " << session->fd << std::endl;
+      messageSize = ReadSize(session->fd);
+      auto message = ReadMessage(messageSize, session->fd);
 
-      std::string message(Sizes, '\0');
-      received = read(session->fd, (char *)message.c_str(), Sizes);
-      if (received < 0) {
-        throw std::runtime_error("Cannot receive message");
-      }
+      pthread_mutex_unlock(&m);
 
-      session->serv->SendToAll(message, username);
+      session->serv->SendToAll(message, nickname);
     } catch (std::runtime_error &e) {
       session->serv->DeleteClient(session->fd);
       std::cerr << e.what() << std::endl;
