@@ -3,12 +3,6 @@
 #include <vector>
 #include "ServerAppDir/TcpServer.h"
 
-void sig_handler(int sig) {
-  if (sig == SIGINT) {
-    exit(0);
-  }
-}
-
 [[nodiscard]] std::int32_t ReadSize(int sockFd) {
   std::int32_t size = -1;
   long n = read(sockFd, &size, sizeof(std::uint32_t));
@@ -34,7 +28,6 @@ void sig_handler(int sig) {
 
 void *HandleClient(void *arg) {
   auto session = (ClientSessionInfo *)arg;
-  signal(SIGINT, sig_handler);
   while (true) {
     auto messageSize = ReadSize(session->fd);
     if (messageSize <= 0) {
@@ -63,14 +56,13 @@ int main(int argc, char *argv[]) {
     std::cerr << "Usage ./server port" << std::endl;
     return -1;
   }
-  std::vector<pthread_t> threads;
+
   TcpServer server{std::stoi(argv[1])};
   while (true) {
     auto session = server.Accept();
     pthread_t newClientThread;
     session->serv = &server;
     pthread_create(&newClientThread, nullptr, HandleClient, session);
-    threads.push_back(newClientThread);
   }
 
   return 0;

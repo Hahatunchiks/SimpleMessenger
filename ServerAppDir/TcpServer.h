@@ -50,6 +50,7 @@ class TcpServer {
   ~TcpServer() {
     close(m_ListenSocket);
     pthread_mutex_destroy(&m_Mutex);
+    DeleteAll();
   }
 
   [[nodiscard]] ClientSessionInfo *Accept() {
@@ -107,8 +108,17 @@ class TcpServer {
     pthread_mutex_unlock(&m_Mutex);
   }
 
-  void DeleteClient(int fd) { m_ClientSockets.erase(fd); }
+  void DeleteClient(int fd) {
+    close(fd);
+    m_ClientSockets.erase(fd);
+  }
 
+  void DeleteAll() {
+    for (const auto &i : m_ClientSockets) {
+      close(i);
+    }
+    m_ClientSockets.clear();
+  }
  private:
   int m_ListenSocket;
   int m_Port;

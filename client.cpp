@@ -43,25 +43,19 @@ void *ReceiveTask(void *args) {
   auto *session = (TcpSession *)args;
   std::vector<std::string> buff;
   while (true) {
-    try {
-      auto message = session->Receive();
-
-      if (message.empty()) {
-        break;
-      }
-
-      buff.push_back(message);
-      if (session->GetIsEnterMessage()) {
-        continue;
-      }
-      for (const auto &i : buff) {
-        std::cout << i << std::endl;
-      }
-      buff.clear();
-    } catch (std::system_error &e) {
-      std::cerr << e.what() << std::endl;
+    auto message = session->Receive();
+    if (message.empty()) {
       break;
     }
+
+    buff.push_back(message);
+    if (session->GetIsEnterMessage()) {
+      continue;
+    }
+    for (const auto &i : buff) {
+      std::cout << i << std::endl;
+    }
+    buff.clear();
   }
   return nullptr;
 }
@@ -85,26 +79,23 @@ int main(int argc, char *argv[]) {
     exit(0);
   }
 
-  try {
-    TcpSession session{host, user};
-    session.Connect();
+  TcpSession session{host, user};
+  if (!session.Connect()) {
+    exit(0);
+  }
 
-    pthread_t sender, receiver;
-    int senderIt = pthread_create(&sender, nullptr, SendTask, &session);
-    int receiverIt = pthread_create(&receiver, nullptr, ReceiveTask, &session);
-    if (senderIt) {
-      return -1;
-    }
-    if (receiverIt) {
-      return -1;
-    }
-
-    pthread_join(sender, nullptr);
-    pthread_join(receiver, nullptr);
-  } catch (std::runtime_error &e) {
-    std::cerr << e.what() << std::endl;
+  pthread_t sender, receiver;
+  int senderIt = pthread_create(&sender, nullptr, SendTask, &session);
+  int receiverIt = pthread_create(&receiver, nullptr, ReceiveTask, &session);
+  if (senderIt) {
     return -1;
   }
+  if (receiverIt) {
+    return -1;
+  }
+
+  pthread_join(sender, nullptr);
+  pthread_join(receiver, nullptr);
 
   return 0;
 }

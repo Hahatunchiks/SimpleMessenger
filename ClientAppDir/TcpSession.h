@@ -37,10 +37,11 @@ class TcpSession {
 
   ~TcpSession() { close(m_SockFd); }
 
-  void Connect() {
+  bool Connect() {
     if (connect(m_SockFd, (sockaddr *)&m_servAddr, sizeof(m_servAddr)) < 0) {
-      return;
+      return false;
     }
+    return true;
   }
 
   [[nodiscard]] long SendSize(std::uint32_t size) const {
@@ -82,7 +83,7 @@ class TcpSession {
   }
 
   [[nodiscard]] std::int32_t ReadSize() const {
-    std::int32_t size;
+    std::int32_t size = -1;
     long n = read(m_SockFd, &size, sizeof(std::int32_t));
     if (n < 0) {
       return -1;
@@ -96,8 +97,8 @@ class TcpSession {
     while (received < size) {
       long n =
           read(m_SockFd, (char *)message.c_str() + received, size - received);
-      if (n < 0) {
-        {}
+      if (n <= 0) {
+        return {};
       }
       received += n;
     }
@@ -106,22 +107,31 @@ class TcpSession {
 
   [[nodiscard]] std::string Receive() const {
     std::int32_t msgSize = ReadSize();
-    if (msgSize < 0) {
+    if (msgSize <= 0) {
       return {};
     }
     std::string nickname = ReadMessage(msgSize);
+    if(nickname.empty()) {
+      return {};
+    }
 
     msgSize = ReadSize();
-    if (msgSize < 0) {
+    if (msgSize <= 0) {
       return {};
     }
     std::string data = ReadMessage(msgSize);
+    if(data.empty()) {
+      return {};
+    }
 
     msgSize = ReadSize();
-    if (msgSize < 0) {
+    if (msgSize <= 0) {
       return {};
     }
     std::string date = ReadMessage(msgSize);
+    if(date.empty()) {
+      return {};
+    }
     return "{" + date + "}[" + nickname + "]" + data;
   }
 
