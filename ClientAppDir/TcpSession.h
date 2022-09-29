@@ -19,12 +19,12 @@ class TcpSession {
   TcpSession(Host &h, User &u) : m_HostInfo{h}, m_UserInfo{u} {
     m_SockFd = socket(AF_INET, SOCK_STREAM, 0);
     if (m_SockFd < 0) {
-      throw std::runtime_error("cannot create socket");
+      return;
     }
 
     m_Server = gethostbyname(h.m_Host.c_str());
     if (!m_Server) {
-      throw std::runtime_error("cannot resolve host");
+      return;
     }
 
     memset(&m_servAddr, '\0', sizeof(m_servAddr));
@@ -35,50 +35,57 @@ class TcpSession {
     m_servAddr.sin_port = htons(m_HostInfo.m_Port);
   }
 
-  ~TcpSession() {
-    if (close(m_SockFd) < 0) {
-      std::cerr << "Cannot close socket" << std::endl;
-    }
-  }
+  ~TcpSession() { close(m_SockFd); }
 
   void Connect() {
     if (connect(m_SockFd, (sockaddr *)&m_servAddr, sizeof(m_servAddr)) < 0) {
-      throw std::runtime_error("Cannot connect to server\n");
+      return;
     }
   }
 
-  void SendSize(std::uint32_t size) const {
+  [[nodiscard]] long SendSize(std::uint32_t size) const {
     long n = write(m_SockFd, &size, sizeof(std::uint32_t));
     if (n < 0) {
-      throw std::runtime_error("Cannot write msg size");
+      return -1;
     }
+    return n;
   }
 
-  void SendMessage(const std::string &message) const {
-    unsigned long sent = 0;
-    while (sent < message.size()) {
+  [[nodiscard]] long SendMessage(const std::string &message) const {
+    long sent = 0;
+    while (sent < (long)message.size()) {
       long curr = write(m_SockFd, (char *)message.c_str() + sent,
                         message.size() - sent);
       if (curr < 0) {
-        throw std::runtime_error("Cannot write msg");
+        return -1;
       }
       sent += curr;
     }
+    return sent;
   }
 
-  void Send(const std::string &msg) const {
-    SendSize(m_UserInfo.m_Nickname.size());
-    SendMessage(m_UserInfo.m_Nickname);
+  [[nodiscard]] int Send(const std::string &msg) const {
+    if (SendSize(m_UserInfo.m_Nickname.size()) < 0) {
+      return - 1;
+    }
+    if (SendMessage(m_UserInfo.m_Nickname) < 0) {
+      return - 1;
+    }
 
-    SendSize(msg.size());
-    SendMessage(msg);
+    if (SendSize(msg.size()) < 0) {
+      return - 1;
+    }
+    if (SendMessage(msg) < 0) {
+      return - 1;
+    }
+    return 0;
   }
 
-  [[nodiscard]] std::uint32_t ReadSize() const {
-    std::uint32_t size;
-    long n = read(m_SockFd, &size, sizeof(std::uint32_t));
+  [[nodiscard]] std::int32_t ReadSize() const {
+    std::int32_t size;
+    long n = read(m_SockFd, &size, sizeof(std::int32_t));
     if (n < 0) {
-      throw std::runtime_error("Cannot read msg size");
+      return -1;
     }
     return size;
   }
@@ -90,7 +97,7 @@ class TcpSession {
       long n =
           read(m_SockFd, (char *)message.c_str() + received, size - received);
       if (n < 0) {
-        throw std::runtime_error("Cannot read msg size");
+        {}
       }
       received += n;
     }
@@ -98,13 +105,22 @@ class TcpSession {
   }
 
   [[nodiscard]] std::string Receive() const {
-    std::uint32_t msgSize = ReadSize();
+    std::int32_t msgSize = ReadSize();
+    if (msgSize < 0) {
+      return {};
+    }
     std::string nickname = ReadMessage(msgSize);
 
     msgSize = ReadSize();
+    if (msgSize < 0) {
+      return {};
+    }
     std::string data = ReadMessage(msgSize);
 
     msgSize = ReadSize();
+    if (msgSize < 0) {
+      return {};
+    }
     std::string date = ReadMessage(msgSize);
     return "{" + date + "}[" + nickname + "]" + data;
   }
@@ -112,8 +128,6 @@ class TcpSession {
   [[nodiscard]] bool GetIsEnterMessage() const { return isEnterMessage; }
 
   void SetIsEnterMessage(bool flag) { isEnterMessage = flag; }
-
-   bool isEOF{false};
 
  private:
   Host m_HostInfo;

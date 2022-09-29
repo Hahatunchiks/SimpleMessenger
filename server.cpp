@@ -1,15 +1,19 @@
 #include <pthread.h>
-
+#include <csignal>
 #include <vector>
 #include "ServerAppDir/TcpServer.h"
 
-pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+void sig_handler(int sig) {
+  if(sig == SIGINT) {
+    exit(0);
+  }
+}
 
-[[nodiscard]] std::uint32_t ReadSize(int sockFd) {
-  std::uint32_t size = -1;
+[[nodiscard]] std::int32_t ReadSize(int sockFd) {
+  std::int32_t size = -1;
   long n = read(sockFd, &size, sizeof(std::uint32_t));
   if (n <= 0) {
-    throw std::runtime_error("Cannot read msg size");
+    return -1;
   }
   return size;
 }
@@ -20,7 +24,7 @@ pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
   while (received < size) {
     long n = read(sockFd, (char *)message.c_str() + received, size - received);
     if (n <= 0) {
-      throw std::runtime_error("Cannot read msg size");
+      return {};
     }
 
     received += n;
@@ -30,32 +34,30 @@ pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
 
 void *HandleClient(void *arg) {
   auto session = (ClientSessionInfo *)arg;
+  signal(SIGINT, sig_handler);
   while (true) {
-    try {
-      pthread_mutex_lock(&m);
-      auto messageSize = ReadSize(session->fd);
-      auto nickname = ReadMessage(messageSize, session->fd);
-
-      messageSize = ReadSize(session->fd);
-      auto message = ReadMessage(messageSize, session->fd);
-
-      pthread_mutex_unlock(&m);
-
-      session->serv->SendToAll(message, nickname);
-    } catch (std::runtime_error &e) {
-      session->serv->DeleteClient(session->fd);
-      std::cerr << e.what() << std::endl;
-      pthread_mutex_unlock(&m);
-      break;
-    } catch (...) {
-      session->serv->DeleteClient(session->fd);
-      std::cerr << "Strange errors..." << std::endl;
-      pthread_mutex_unlock(&m);
+    auto messageSize = ReadSize(session->fd);
+    if (messageSize <= 0) {
       break;
     }
+    auto nickname = ReadMessage(messageSize, session->fd);
+    if (nickname.empty()) {
+      break;
+    }
+    messageSize = ReadSize(session->fd);
+    if (messageSize <= 0) {
+      break;
+    }
+    auto message = ReadMessage(messageSize, session->fd);
+    if (message.empty()) {
+      break;
+    }
+    session->serv->SendToAll(message, nickname);
   }
+  session->serv->DeleteClient(session->fd);
   return nullptr;
 }
+
 
 int main(int argc, char *argv[]) {
   if (argc != 2) {
@@ -63,18 +65,13 @@ int main(int argc, char *argv[]) {
     return -1;
   }
   std::vector<pthread_t> threads;
-  try {
-    TcpServer server{std::stoi(argv[1])};
-    while (true) {
-      auto session = server.Accept();
-      pthread_t newClientThread;
-      session->serv = &server;
-      pthread_create(&newClientThread, nullptr, HandleClient, session);
-
-      threads.push_back(newClientThread);
-    }
-  } catch (std::runtime_error &e) {
-    std::cerr << "Error " << e.what() << std::endl;
+  TcpServer server{std::stoi(argv[1])};
+  while (true) {
+    auto session = server.Accept();
+    pthread_t newClientThread;
+    session->serv = &server;
+    pthread_create(&newClientThread, nullptr, HandleClient, session);
+    threads.push_back(newClientThread);
   }
 
   return 0;

@@ -1,47 +1,55 @@
 #include <pthread.h>
+#include <csignal>
 #include <iostream>
 #include <string>
 #include <vector>
 
 #include "ClientAppDir/TcpSession.h"
 
+void sig_handler(int sig) {
+  if (sig == SIGINT) {
+    exit(0);
+  }
+}
+
 void *SendTask(void *args) {
+  signal(SIGINT, sig_handler);
   auto *session = (TcpSession *)args;
   while (true) {
     std::string inputMessage;
+
     std::getline(std::cin, inputMessage, '\n');
     if (inputMessage.empty()) {
-      session->isEOF = true;
       break;
     }
+
     if (!session->GetIsEnterMessage()) {
       if (inputMessage == "m") {
         session->SetIsEnterMessage(true);
       }
       continue;
     }
-
-    try {
-      session->Send(inputMessage);
-      session->SetIsEnterMessage(false);
-    } catch (std::system_error &e) {
-      std::cerr << e.what() << std::endl;
-      break;
-    } catch (...) {
-      std::cerr << "Send Task Strange errors..." << std::endl;
-      break;
+    if(session->Send(inputMessage) < 0) {
+      std::cerr << "Send function\n";
+      break ;
     }
+    session->SetIsEnterMessage(false);
   }
   return nullptr;
 }
 
 void *ReceiveTask(void *args) {
+  signal(SIGINT, sig_handler);
   auto *session = (TcpSession *)args;
   std::vector<std::string> buff;
   while (true) {
     try {
-      if (session->isEOF) break;
       auto message = session->Receive();
+
+      if (message.empty()) {
+        break;
+      }
+
       buff.push_back(message);
       if (session->GetIsEnterMessage()) {
         continue;
@@ -52,9 +60,6 @@ void *ReceiveTask(void *args) {
       buff.clear();
     } catch (std::system_error &e) {
       std::cerr << e.what() << std::endl;
-      break;
-    } catch (...) {
-      std::cerr << "Server errors..." << std::endl;
       break;
     }
   }
