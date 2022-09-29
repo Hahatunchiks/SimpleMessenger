@@ -57,10 +57,11 @@ int main(int argc, char *argv[]) {
   while (true) {
     ServerMessage message;
     auto resp = client.Receive(message);
-    if(resp < 0) {
-      break ;
+    if (resp < 0) {
+      break;
     }
-    std::cout << "{" + message.nickname + "}[" + message.date + "]" + message.data;
+    std::cout << "{" + message.nickname + "}[" + message.date + "]" +
+                     message.data;
   }
 
   pthread_join(sendThread, nullptr);

@@ -6,24 +6,24 @@
 #include "Inc/server.h"
 
 void *HandleClientRoutine(void *arg) {
-  auto client = (ClientInfo *) arg;
+  auto client = (ClientInfo *)arg;
   while (true) {
     ClientMessage message;
     auto receiveMessageSize = client->server->Receive(message, client->sockFd);
-    if(receiveMessageSize < 0) {
+    if (receiveMessageSize < 0) {
       break;
     }
-    //std::cerr << message.nicknameSize << " " << message.nickname << " " << message.dataSize << " " << message.data << std::endl;
+    // std::cerr << message.nicknameSize << " " << message.nickname << " " <<
+    // message.dataSize << " " << message.data << std::endl;
     ServerMessage serverMessage;
     serverMessage.nicknameSize = message.nicknameSize;
     serverMessage.nickname = message.nickname;
     serverMessage.dataSize = message.dataSize;
     serverMessage.data = message.data;
     auto sendMessage = client->server->SendMultiCast(serverMessage);
-    if(sendMessage < 0) {
+    if (sendMessage < 0) {
       break;
     }
-
   }
 
   close(client->sockFd);
@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
     threads.push_back(clientThread);
   }
 
-  for(auto t : threads) {
+  for (auto t : threads) {
     pthread_join(t, nullptr);
   }
 
