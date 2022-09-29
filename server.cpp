@@ -1,5 +1,4 @@
 #include <pthread.h>
-#include <csignal>
 #include <vector>
 #include "ServerAppDir/TcpServer.h"
 
@@ -28,24 +27,31 @@
 
 void *HandleClient(void *arg) {
   auto session = (ClientSessionInfo *)arg;
-  while (true) {
-    auto messageSize = ReadSize(session->fd);
-    if (messageSize <= 0) {
-      break;
+  try {
+    while (true) {
+      auto messageSize = ReadSize(session->fd);
+      if (messageSize <= 0) {
+        break;
+      }
+
+      auto nickname = ReadMessage(messageSize, session->fd);
+      if (nickname.empty()) {
+        break;
+      }
+
+      messageSize = ReadSize(session->fd);
+      if (messageSize <= 0) {
+        break;
+      }
+
+      auto message = ReadMessage(messageSize, session->fd);
+      if (message.empty()) {
+        break;
+      }
+      session->serv->SendToAll(message, nickname);
     }
-    auto nickname = ReadMessage(messageSize, session->fd);
-    if (nickname.empty()) {
-      break;
-    }
-    messageSize = ReadSize(session->fd);
-    if (messageSize <= 0) {
-      break;
-    }
-    auto message = ReadMessage(messageSize, session->fd);
-    if (message.empty()) {
-      break;
-    }
-    session->serv->SendToAll(message, nickname);
+  } catch (std::runtime_error &e) {
+    std::cerr << e.what();
   }
   session->serv->DeleteClient(session->fd);
   return nullptr;
@@ -58,11 +64,15 @@ int main(int argc, char *argv[]) {
   }
 
   TcpServer server{std::stoi(argv[1])};
-  while (true) {
-    auto session = server.Accept();
-    pthread_t newClientThread;
-    session->serv = &server;
-    pthread_create(&newClientThread, nullptr, HandleClient, session);
+  try {
+    while (true) {
+      auto session = server.Accept();
+      pthread_t newClientThread;
+      session->serv = &server;
+      pthread_create(&newClientThread, nullptr, HandleClient, session);
+    }
+  } catch (std::runtime_error &e) {
+    std::cerr << e.what();
   }
 
   return 0;

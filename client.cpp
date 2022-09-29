@@ -6,56 +6,37 @@
 
 #include "ClientAppDir/TcpSession.h"
 
-void sig_handler(int sig) {
+void sig_hand(int sig) {
   if (sig == SIGINT) {
     exit(0);
   }
 }
 
 void *SendTask(void *args) {
-  signal(SIGINT, sig_handler);
-  auto *session = (TcpSession *)args;
-  while (true) {
-    std::string inputMessage;
+  try {
+    auto *session = (TcpSession *)args;
+    while (true) {
+      std::string inputMessage;
 
-    std::getline(std::cin, inputMessage, '\n');
-    if (inputMessage.empty()) {
-      break;
-    }
-
-    if (!session->GetIsEnterMessage()) {
-      if (inputMessage == "m") {
-        session->SetIsEnterMessage(true);
+      std::getline(std::cin, inputMessage, '\n');
+      if (inputMessage.empty()) {
+        break;
       }
-      continue;
-    }
-    if (session->Send(inputMessage) < 0) {
-      std::cerr << "Send function\n";
-      break;
-    }
-    session->SetIsEnterMessage(false);
-  }
-  return nullptr;
-}
 
-void *ReceiveTask(void *args) {
-  signal(SIGINT, sig_handler);
-  auto *session = (TcpSession *)args;
-  std::vector<std::string> buff;
-  while (true) {
-    auto message = session->Receive();
-    if (message.empty()) {
-      break;
+      if (!session->GetIsEnterMessage()) {
+        if (inputMessage == "m") {
+          session->SetIsEnterMessage(true);
+        }
+        continue;
+      }
+      if (session->Send(inputMessage) < 0) {
+        std::cerr << "Send function\n";
+        break;
+      }
+      session->SetIsEnterMessage(false);
     }
-
-    buff.push_back(message);
-    if (session->GetIsEnterMessage()) {
-      continue;
-    }
-    for (const auto &i : buff) {
-      std::cout << i << std::endl;
-    }
-    buff.clear();
+  } catch (std::runtime_error &e) {
+    std::cerr << e.what();
   }
   return nullptr;
 }
@@ -63,6 +44,7 @@ void *ReceiveTask(void *args) {
 int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
+  signal(SIGINT, sig_hand);
   if (argc != 4) {
     std::cerr << "usage %s hostname port nickname\n";
     exit(0);
@@ -84,18 +66,27 @@ int main(int argc, char *argv[]) {
     exit(0);
   }
 
-  pthread_t sender, receiver;
+  pthread_t sender;
   int senderIt = pthread_create(&sender, nullptr, SendTask, &session);
-  int receiverIt = pthread_create(&receiver, nullptr, ReceiveTask, &session);
   if (senderIt) {
     return -1;
   }
-  if (receiverIt) {
-    return -1;
+  std::vector<std::string> buff;
+  while (true) {
+    auto message = session.Receive();
+    if (message.empty()) {
+      break;
+    }
+    buff.push_back(message);
+    if (session.GetIsEnterMessage()) {
+      continue;
+    }
+    for (const auto &i : buff) {
+      std::cout << i << std::endl;
+    }
+    buff.clear();
   }
 
   pthread_join(sender, nullptr);
-  pthread_join(receiver, nullptr);
-
   return 0;
 }
