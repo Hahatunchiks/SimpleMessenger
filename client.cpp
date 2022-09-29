@@ -4,89 +4,65 @@
 #include <string>
 #include <vector>
 
-#include "ClientAppDir/TcpSession.h"
+#include "Inc/client.h"
+#include "Inc/common.h"
 
-void sig_hand(int sig) {
-  if (sig == SIGINT) {
-    exit(0);
-  }
-}
+void handleSignal(int) { exit(0); }
 
-void *SendTask(void *args) {
-  try {
-    auto *session = (TcpSession *)args;
-    while (true) {
-      std::string inputMessage;
-
-      std::getline(std::cin, inputMessage, '\n');
-      if (inputMessage.empty()) {
-        break;
-      }
-
-      if (!session->GetIsEnterMessage()) {
-        if (inputMessage == "m") {
-          session->SetIsEnterMessage(true);
-        }
-        continue;
-      }
-      if (session->Send(inputMessage) < 0) {
-        std::cerr << "Send function\n";
-        break;
-      }
-      session->SetIsEnterMessage(false);
+void *SendRoutine(void *arg) {
+  auto client = (Client *)arg;
+  while (true) {
+    int start = std::getchar();
+    int nextLine = std::getchar();
+    if (start != 'm' && nextLine != '\n') {
+      std::fflush(stdin);
+      continue;
     }
-  } catch (std::runtime_error &e) {
-    std::cerr << e.what();
+
+    char *input = nullptr;
+    std::size_t messageSize = 0;
+    if (getline(&input, &messageSize, stdin) < 0) {
+      break;
+    }
+    std::string strInput{input};
+    free(input);
+
+    ClientMessage outputMessage{client->nicknameSize(), client->nickname(),
+                                (std::uint32_t)strInput.size(), strInput};
+
+    if (client->Send(outputMessage) < 0) {
+      break;
+    }
   }
+
   return nullptr;
 }
-
 int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
-  signal(SIGINT, sig_hand);
+  signal(SIGINT, handleSignal);
   if (argc != 4) {
     std::cerr << "usage %s hostname port nickname\n";
     exit(0);
   }
 
-  User user;
-  Host host;
-  host.m_Port = std::stoi(argv[2]);
-  host.m_Host = argv[1];
-  user.m_Nickname = argv[3];
-
-  if (user.m_Nickname.empty() || host.m_Host.empty()) {
-    std::cerr << "usage %s hostname port nickname\n";
-    exit(0);
+  Client client{argv[1], std::stoi(argv[2]), argv[3]};
+  if (!client.Connect()) {
+    exit(errno);
   }
 
-  TcpSession session{host, user};
-  if (!session.Connect()) {
-    exit(0);
-  }
+  pthread_t sendThread;
+  pthread_create(&sendThread, nullptr, SendRoutine, &client);
 
-  pthread_t sender;
-  int senderIt = pthread_create(&sender, nullptr, SendTask, &session);
-  if (senderIt) {
-    return -1;
-  }
-  std::vector<std::string> buff;
   while (true) {
-    auto message = session.Receive();
-    if (message.empty()) {
-      break;
+    ServerMessage message;
+    auto resp = client.Receive(message);
+    if(resp < 0) {
+      break ;
     }
-    buff.push_back(message);
-    if (session.GetIsEnterMessage()) {
-      continue;
-    }
-    for (const auto &i : buff) {
-      std::cout << i << std::endl;
-    }
-    buff.clear();
+    std::cout << "{" + message.nickname + "}[" + message.date + "]" + message.data;
   }
 
-  pthread_join(sender, nullptr);
+  pthread_join(sendThread, nullptr);
   return 0;
 }

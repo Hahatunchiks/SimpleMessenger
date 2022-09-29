@@ -1,59 +1,33 @@
 #include <pthread.h>
+#include <iostream>
 #include <vector>
-#include "ServerAppDir/TcpServer.h"
 
-[[nodiscard]] std::int32_t ReadSize(int sockFd) {
-  std::int32_t size = -1;
-  long n = read(sockFd, &size, sizeof(std::uint32_t));
-  if (n <= 0) {
-    return -1;
-  }
-  return size;
-}
+#include "Inc/common.h"
+#include "Inc/server.h"
 
-[[nodiscard]] std::string ReadMessage(std::uint32_t size, int sockFd) {
-  std::string message(size, '\0');
-  long received = 0;
-  while (received < size) {
-    long n = read(sockFd, (char *)message.c_str() + received, size - received);
-    if (n <= 0) {
-      return {};
+void *HandleClientRoutine(void *arg) {
+  auto client = (ClientInfo *) arg;
+  while (true) {
+    ClientMessage message;
+    auto receiveMessageSize = client->server->Receive(message, client->sockFd);
+    if(receiveMessageSize < 0) {
+      break;
+    }
+    //std::cerr << message.nicknameSize << " " << message.nickname << " " << message.dataSize << " " << message.data << std::endl;
+    ServerMessage serverMessage;
+    serverMessage.nicknameSize = message.nicknameSize;
+    serverMessage.nickname = message.nickname;
+    serverMessage.dataSize = message.dataSize;
+    serverMessage.data = message.data;
+    auto sendMessage = client->server->SendMultiCast(serverMessage);
+    if(sendMessage < 0) {
+      break;
     }
 
-    received += n;
   }
-  return message;
-}
 
-void *HandleClient(void *arg) {
-  auto session = (ClientSessionInfo *)arg;
-  try {
-    while (true) {
-      auto messageSize = ReadSize(session->fd);
-      if (messageSize <= 0) {
-        break;
-      }
-
-      auto nickname = ReadMessage(messageSize, session->fd);
-      if (nickname.empty()) {
-        break;
-      }
-
-      messageSize = ReadSize(session->fd);
-      if (messageSize <= 0) {
-        break;
-      }
-
-      auto message = ReadMessage(messageSize, session->fd);
-      if (message.empty()) {
-        break;
-      }
-      session->serv->SendToAll(message, nickname);
-    }
-  } catch (std::runtime_error &e) {
-    std::cerr << e.what();
-  }
-  session->serv->DeleteClient(session->fd);
+  close(client->sockFd);
+  client->server->DeleteClient(client->sockFd);
   return nullptr;
 }
 
@@ -63,16 +37,22 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  TcpServer server{std::stoi(argv[1])};
-  try {
-    while (true) {
-      auto session = server.Accept();
-      pthread_t newClientThread;
-      session->serv = &server;
-      pthread_create(&newClientThread, nullptr, HandleClient, session);
+  Server server{std::stoi(argv[1])};
+
+  std::vector<pthread_t> threads;
+  while (true) {
+    auto client = server.Accept();
+    auto *clt = new ClientInfo(client, &server);
+
+    pthread_t clientThread;
+    if (pthread_create(&clientThread, nullptr, HandleClientRoutine, clt) != 0) {
+      break;
     }
-  } catch (std::runtime_error &e) {
-    std::cerr << e.what();
+    threads.push_back(clientThread);
+  }
+
+  for(auto t : threads) {
+    pthread_join(t, nullptr);
   }
 
   return 0;
