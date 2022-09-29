@@ -29,9 +29,9 @@ void *SendTask(void *args) {
       }
       continue;
     }
-    if(session->Send(inputMessage) < 0) {
+    if (session->Send(inputMessage) < 0) {
       std::cerr << "Send function\n";
-      break ;
+      break;
     }
     session->SetIsEnterMessage(false);
   }

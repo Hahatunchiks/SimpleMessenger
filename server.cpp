@@ -4,7 +4,7 @@
 #include "ServerAppDir/TcpServer.h"
 
 void sig_handler(int sig) {
-  if(sig == SIGINT) {
+  if (sig == SIGINT) {
     exit(0);
   }
 }
@@ -57,7 +57,6 @@ void *HandleClient(void *arg) {
   session->serv->DeleteClient(session->fd);
   return nullptr;
 }
-
 
 int main(int argc, char *argv[]) {
   if (argc != 2) {
