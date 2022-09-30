@@ -2,18 +2,23 @@
 #include <csignal>
 #include <iostream>
 #include <string>
-#include <vector>
 
 #include "Inc/client.h"
 #include "Inc/common.h"
 
 void handleSignal(int) { exit(0); }
 
+static bool endInput = false;
 void *SendRoutine(void *arg) {
   auto client = (Client *)arg;
   while (true) {
     int start = std::getchar();
     int nextLine = std::getchar();
+
+    if (start == EOF || nextLine == EOF) {
+      endInput = true;
+      break;
+    }
     if (start != 'm' && nextLine != '\n') {
       std::fflush(stdin);
       continue;
@@ -56,10 +61,12 @@ int main(int argc, char *argv[]) {
 
   while (true) {
     ServerMessage message;
+    if (endInput) break;
     auto resp = client.Receive(message);
     if (resp < 0) {
       break;
     }
+
     std::cout << "{" + message.nickname + "}[" + message.date + "]" +
                      message.data;
   }

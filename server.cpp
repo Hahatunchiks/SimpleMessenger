@@ -17,6 +17,7 @@ void *HandleClientRoutine(void *arg) {
     // message.dataSize << " " << message.data << std::endl;
     ServerMessage serverMessage;
     serverMessage.nicknameSize = message.nicknameSize;
+
     serverMessage.nickname = message.nickname;
     serverMessage.dataSize = message.dataSize;
     serverMessage.data = message.data;
