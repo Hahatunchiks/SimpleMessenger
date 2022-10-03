@@ -68,28 +68,25 @@ class Server {
   }
 
   ssize_t SendMultiCast(ServerMessage &message) {
-    time_t time_now = time(nullptr);
-    struct tm *local_time_now = localtime(&time_now);
-    message.date.resize(7);
-    strftime((char *)message.date.c_str(), 6, "%H:%M", local_time_now);
-    message.dateSize = (uint32_t)message.date.size();
-   // std::cerr << "block";
     pthread_mutex_lock(&m_Mutex);
 
     for (auto fd : m_ClientsSockets) {
-    //  std::cerr << "NICKNAME " << message.nickname << std::endl;
+
       ssize_t sent = SendMessage(fd, message.nickname, message.nicknameSize);
       if(sent < 0) {
+        pthread_mutex_unlock(&m_Mutex);
         return -1;
       }
 
       sent = SendMessage(fd, message.data, message.dataSize);
       if(sent < 0) {
+        pthread_mutex_unlock(&m_Mutex);
         return -1;
       }
 
       sent = SendMessage(fd, message.date, message.dateSize);
       if(sent < 0) {
+        pthread_mutex_unlock(&m_Mutex);
         return -1;
       }
 
@@ -117,7 +114,6 @@ class Server {
     }
     message.dataSize = message.data.size();
     totalRead += read_;
- //   std::cerr << "RECEIVED: " << message.nickname << " " << message.data << std::endl;
     return totalRead;
   }
 

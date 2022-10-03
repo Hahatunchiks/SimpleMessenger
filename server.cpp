@@ -13,14 +13,19 @@ void *HandleClientRoutine(void *arg) {
     if (receiveMessageSize < 0) {
       break;
     }
-    // std::cerr << message.nicknameSize << " " << message.nickname << " " <<
-    // message.dataSize << " " << message.data << std::endl;
     ServerMessage serverMessage;
     serverMessage.nicknameSize = message.nicknameSize;
-
     serverMessage.nickname = message.nickname;
+
     serverMessage.dataSize = message.dataSize;
     serverMessage.data = message.data;
+    time_t time_now = time(nullptr);
+    struct tm *local_time_now = localtime(&time_now);
+    char date[6];
+    strftime(date, 6, "%H:%M", local_time_now);
+    serverMessage.dateSize = 5;
+    serverMessage.date = std::string{date};
+
     auto sendMessage = client->server->SendMultiCast(serverMessage);
     if (sendMessage < 0) {
       break;
@@ -29,6 +34,7 @@ void *HandleClientRoutine(void *arg) {
 
   close(client->sockFd);
   client->server->DeleteClient(client->sockFd);
+  // std::cerr << "exit server thread\n";
   return nullptr;
 }
 

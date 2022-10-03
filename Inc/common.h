@@ -41,13 +41,11 @@ ssize_t ReceiveMessage(int fd, std::string &field) {
 
 
   size = ntohl(size);
- // std::cerr << "Received size " << size <<  " Read_ " << read_ <<std::endl;
   field.resize(size);
   read_ = recv(fd, (char *)field.c_str(), size, MSG_NOSIGNAL | MSG_WAITALL);
   if ((read_ == 0 && errno != EAGAIN) ||  (read_ != size)) {
     return -1;
   }
- // std::cerr << "Received message " << field << std::endl;
   totalRead += read_;
 
   return totalRead;
@@ -59,20 +57,26 @@ ssize_t SendMessage(int fd, const std::string &field, std::uint32_t size) {
   ssize_t send_;
 
   std::uint32_t netSize = htonl(size);
-
-  send_ = send(fd, &netSize, sizeof(netSize), MSG_NOSIGNAL | MSG_WAITALL);
-  if ((send_ == 0 && errno != EAGAIN) ||  (send_ != sizeof(netSize))) {
-    return -1;
+  ssize_t sentSize = 0;
+  while (sentSize < (ssize_t)sizeof(std::uint32_t)) {
+    send_ = send(fd, (char*)&netSize + sentSize, sizeof(netSize) - sentSize, MSG_NOSIGNAL);
+    if (send_ <= 0)  {
+      return -1;
+    }
+    sentSize += send_;
   }
-  //std::cerr << "Sent size " << send_<< std::endl;
+  //std::cerr << "SEND MESSAGE " << size << " IN NET FORMAT " << netSize << " SIZE " << sizeof(netSize) << " SENT_SIZE "<< sentSize<<  '\n';
   totalSent += send_;
 
-  send_ = send(fd, (char *)field.c_str(), size, MSG_NOSIGNAL | MSG_WAITALL);
-  //std::cerr << "Sent message " << send_ << " SIZE "<< size <<   " MSG " << field << std::endl;
-  if ((send_ == 0 && errno != EAGAIN) ||  (send_ != size)) {
-    return -1;
+  ssize_t sentMsg = 0;
+  while (sentMsg < size) {
+    send_ = send(fd, (char *)field.c_str() + sentMsg, size - sentMsg, MSG_NOSIGNAL);
+    if ((send_ <= 0)) {
+      return -1;
+    }
+    sentMsg += send_;
+    totalSent += send_;
   }
-
-  totalSent += send_;
+  //std::cerr << "SEND MESSAGE " << field.c_str() << " SIZE " << size << " SENT_MSG "<< sentMsg<<  '\n';
   return  totalSent;
 }

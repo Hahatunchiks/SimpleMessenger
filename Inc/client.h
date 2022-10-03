@@ -41,7 +41,6 @@ class Client {
     }
     totalSent += sent;
 
-    //std::cerr << "DATA SIZE " << message.dataSize << std::endl;
     sent = SendMessage(m_SockFd, message.data, message.dataSize);
     if(sent < 0) {
       return -1;
@@ -56,7 +55,9 @@ class Client {
     ssize_t read_;
 
     // receive nickname
+
     read_ = ReceiveMessage(m_SockFd, message.nickname);
+
     if (read_ < 0) {
       return -1;
     }
