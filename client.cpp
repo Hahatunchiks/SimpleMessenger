@@ -56,7 +56,6 @@ int main(int argc, char *argv[]) {
     exit(errno);
   }
 
-  std::cerr << "start clt\n";
   pthread_t sendThread;
   pthread_create(&sendThread, nullptr, SendRoutine, &client);
 

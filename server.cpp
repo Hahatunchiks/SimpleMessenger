@@ -35,6 +35,7 @@ void *HandleClientRoutine(void *arg) {
   close(client->sockFd);
   client->server->DeleteClient(client->sockFd);
   // std::cerr << "exit server thread\n";
+  delete client;
   return nullptr;
 }
 
