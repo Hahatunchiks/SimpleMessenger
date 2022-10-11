@@ -47,7 +47,6 @@ int main(int argc, char *argv[]) {
 
   Server server{std::stoi(argv[1])};
 
-  std::vector<pthread_t> threads;
   while (true) {
     auto client = server.Accept();
     auto *clt = new ClientInfo(client, &server);
@@ -56,12 +55,9 @@ int main(int argc, char *argv[]) {
     if (pthread_create(&clientThread, nullptr, HandleClientRoutine, clt) != 0) {
       break;
     }
-    threads.push_back(clientThread);
+    pthread_detach(clientThread);
   }
 
-  for (auto t : threads) {
-    pthread_join(t, nullptr);
-  }
 
   return 0;
 }
