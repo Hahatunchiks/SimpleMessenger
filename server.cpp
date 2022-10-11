@@ -58,6 +58,5 @@ int main(int argc, char *argv[]) {
     pthread_detach(clientThread);
   }
 
-
   return 0;
 }
